@@ -351,7 +351,7 @@ do
 	Utils.textStroke(closeText, 2)
 	closeBtn.MouseButton1Click:Connect(function()
 		main.Visible = false
-		if isDelta and UI.floatingLogo then UI.floatingLogo.Visible = true end
+		if UI.floatingLogo then UI.floatingLogo.Visible = true end
 	end)
 
 	local contents = Instance.new("Frame", main)
@@ -772,7 +772,7 @@ do
 	showTab("Spawner")
 end
 
-if isDelta then
+do
 	local logoGui = Instance.new("ScreenGui")
 	logoGui.Name = "ChoppedYooEyLogo"
 	logoGui.ResetOnSpawn = false
@@ -1038,7 +1038,7 @@ UI.debugKeyClick.MouseButton1Click:Connect(function() Core.waitingForKey = "debu
 
 local function toggleUI()
 	UI.main.Visible = not UI.main.Visible
-	if isDelta and UI.floatingLogo then
+	if UI.floatingLogo then
 		UI.floatingLogo.Visible = not UI.main.Visible
 	end
 end
@@ -1380,7 +1380,19 @@ function Trade.applySlot(sn)
 		if icon then icon.Image = st.icon or "" end
 		if amt then amt.Text = Trade.fmtOffer(st.amount) end
 		if nl then nl.Text = tostring(st.displayName or st.name) end
-		if st.color then pcall(function() sin.BackgroundColor3 = st.color; sin.BackgroundTransparency = st.transparency or 0 end) end
+		if st.color then
+			pcall(function()
+				local isPhone = currentTradeGUIName == "TradeGUI_Phone"
+				if isPhone then
+					if nl then nl.TextColor3 = st.color end
+					local rarityBar = sin:FindFirstChild("RarityBar")
+					if rarityBar then rarityBar.BackgroundColor3 = st.color end
+				else
+					sin.BackgroundColor3 = st.color
+					sin.BackgroundTransparency = st.transparency or 0
+				end
+			end)
+		end
 		local tags = slot:FindFirstChild("Tags")
 		if tags then
 			local fx = tags:FindFirstChild("FX"); if fx then fx.Visible = st.isFX or false end
@@ -1404,7 +1416,19 @@ function Trade.applyTheirSlot(sn)
 		if icon then icon.Image = st.icon or "" end
 		if amt then amt.Text = Trade.fmtOffer(st.amount) end
 		if nl then nl.Text = tostring(st.displayName or st.name) end
-		if st.color then pcall(function() sin.BackgroundColor3 = st.color; sin.BackgroundTransparency = 0 end) end
+		if st.color then
+			pcall(function()
+				local isPhone = currentTradeGUIName == "TradeGUI_Phone"
+				if isPhone then
+					if nl then nl.TextColor3 = st.color end
+					local rarityBar = sin:FindFirstChild("RarityBar")
+					if rarityBar then rarityBar.BackgroundColor3 = st.color end
+				else
+					sin.BackgroundColor3 = st.color
+					sin.BackgroundTransparency = 0
+				end
+			end)
+		end
 		local tags = slot:FindFirstChild("Tags")
 		if tags then
 			local fx = tags:FindFirstChild("FX"); if fx then fx.Visible = st.isFX or false end
