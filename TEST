@@ -50,6 +50,8 @@ local playerGui = localPlayer:WaitForChild("PlayerGui")
 local clonedTradeGUI = nil
 local realTradeHidden = false
 local autoTraderActive = false
+local savedOriginalPositions = {}
+local positionsSaved = false
 
 local function getExecutorNameDisplay()
 	local name = "Unknown"
@@ -2934,10 +2936,7 @@ ATAcceptTrade.OnClientEvent:Connect(function(success)
 	if success == true then AutoTrader.tradeCompleted = true end
 end)
 
-local savedOriginalPositions = {}
-local positionsSaved = false
 
-local function saveOriginalPositions()
 	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
 	if not tradeGUI then return end
 	for _, child in ipairs(tradeGUI:GetChildren()) do
