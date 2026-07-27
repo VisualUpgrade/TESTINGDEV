@@ -50,91 +50,6 @@ local playerGui = localPlayer:WaitForChild("PlayerGui")
 local clonedTradeGUI = nil
 local realTradeHidden = false
 local autoTraderActive = false
-local savedOriginalPositions = {}
-local positionsSaved = false
-
-local function saveOriginalPositions()
-	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
-	if not tradeGUI then return end
-	for _, child in ipairs(tradeGUI:GetChildren()) do
-		if child:IsA("GuiObject") then
-			if child.Position.X.Offset < 50000 and child.Position.Y.Offset < 50000 then
-				savedOriginalPositions[child.Name] = child.Position
-				positionsSaved = true
-			end
-		end
-	end
-end
-
-local function hideRealTradeGUI()
-	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
-	if not tradeGUI then return end
-	realTradeHidden = true
-	for _, child in ipairs(tradeGUI:GetChildren()) do
-		if child:IsA("GuiObject") then
-			pcall(function()
-				if not savedOriginalPositions[child.Name] then
-					savedOriginalPositions[child.Name] = child.Position
-				end
-				child.Position = UDim2.new(0, 100000, 0, 100000)
-			end)
-		end
-	end
-end
-
-local function restoreClonePositions()
-	if not clonedTradeGUI then return end
-	for _, child in ipairs(clonedTradeGUI:GetChildren()) do
-		if child:IsA("GuiObject") then
-			pcall(function()
-				if savedOriginalPositions[child.Name] then
-					child.Position = savedOriginalPositions[child.Name]
-				elseif child.Position.X.Offset >= 50000 or child.Position.Y.Offset >= 50000 then
-					child.Position = UDim2.new(0.5, 0, 0.5, 0)
-				end
-			end)
-		end
-	end
-end
-
-local function setupCloneBeforeHide()
-	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
-	if not tradeGUI then return nil end
-	if clonedTradeGUI and clonedTradeGUI.Parent then
-		clonedTradeGUI:Destroy()
-		clonedTradeGUI = nil
-	end
-	saveOriginalPositions()
-	clonedTradeGUI = tradeGUI:Clone()
-	clonedTradeGUI.Name = "TradeGUI_Clone"
-	clonedTradeGUI.Parent = playerGui
-	clonedTradeGUI.Enabled = false
-	hideRealTradeGUI()
-	restoreClonePositions()
-	return clonedTradeGUI
-end
-
-local function restoreRealTradeGUI()
-	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
-	if tradeGUI then
-		for _, child in ipairs(tradeGUI:GetChildren()) do
-			if child:IsA("GuiObject") and savedOriginalPositions[child.Name] then
-				pcall(function() child.Position = savedOriginalPositions[child.Name] end)
-			end
-		end
-	end
-	realTradeHidden = false
-	positionsSaved = false
-	savedOriginalPositions = {}
-end
-
-local function destroyClone()
-	if clonedTradeGUI and clonedTradeGUI.Parent then
-		clonedTradeGUI:Destroy()
-		clonedTradeGUI = nil
-	end
-	if not autoTraderActive then restoreRealTradeGUI() end
-end
 
 local function getExecutorNameDisplay()
 	local name = "Unknown"
@@ -257,12 +172,6 @@ function Utils.makeDraggable(dragHandle, moveFrame)
 		end
 	end)
 end
-
-local isDelta = false
-pcall(function()
-	local en = getExecutorName():lower()
-	if en:find("delta") then isDelta = true end
-end)
 
 local UI = {}
 
@@ -759,6 +668,13 @@ do
 	UI.tab3Btn.MouseButton1Click:Connect(function() showTab("Settings") end)
 	showTab("Spawner")
 end
+
+local isDelta = false
+pcall(function()
+	local en = getExecutorName():lower()
+	if en:find("delta") then isDelta = true end
+end)
+
 local Core = {}
 Core.itemDatabase = nil
 Core.allSpawnerClones = {}
@@ -946,6 +862,12 @@ local function updateVisualUI()
 		UI.visualLbl.Text = "Visual Trade: OFF"
 		UI.visualBtn.BackgroundColor3 = MM2.ItemBG
 	end
+	-- Show/hide KeySimulator for Delta
+	if isDelta then
+		if KeySimulator and KeySimulator.Parent then
+			KeySimulator.Enabled = Core.visualTradeEnabled
+		end
+	end
 end
 updateVisualUI()
 UI.visualClick.MouseButton1Click:Connect(function()
@@ -982,6 +904,9 @@ UI.debugKeyClick.MouseButton1Click:Connect(function() Core.waitingForKey = "debu
 
 local function toggleUI() UI.main.Visible = not UI.main.Visible end
 
+-- ============================================================
+-- Trade module (defined early so everything can use it)
+-- ============================================================
 local Trade = {}
 Trade.enabled = false
 Trade.scriptAlive = true
@@ -2068,100 +1993,166 @@ function Trade.startSession(incoming)
 	if incoming then Trade.simulateOther() end
 end
 
-task.spawn(function() task.wait(0.5); Core.populateSpawner() end)
-
-if isDelta then
-	local mobileBtnGui = Instance.new("ScreenGui")
-	mobileBtnGui.Name = "MobileTradeBtns"
-	mobileBtnGui.ResetOnSpawn = false
-	mobileBtnGui.DisplayOrder = 999
-	pcall(function()
-		if syn and syn.protect_gui then syn.protect_gui(mobileBtnGui) end
-		if gethui then mobileBtnGui.Parent = gethui() else mobileBtnGui.Parent = CoreGui end
-	end)
-	if not mobileBtnGui.Parent then mobileBtnGui.Parent = playerGui end
-
-	local mobileContainer = Instance.new("Frame", mobileBtnGui)
-	mobileContainer.Name = "MobileContainer"
-	mobileContainer.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-	mobileContainer.BackgroundTransparency = 0.3
-	mobileContainer.Size = UDim2.new(0, 130, 0, 120)
-	mobileContainer.Position = UDim2.new(0, 10, 0.5, -60)
-	mobileContainer.Active = true
-	mobileContainer.BorderSizePixel = 0
-	Utils.corner(mobileContainer, 10)
-	Utils.stroke(mobileContainer, MM2.TabStroke, 2)
-
-	local dragHandle = Instance.new("Frame", mobileContainer)
-	dragHandle.Size = UDim2.new(1, 0, 0, 22)
-	dragHandle.BackgroundColor3 = MM2.TitleBar
-	dragHandle.BorderSizePixel = 0
-	Utils.corner(dragHandle, 8)
-	local dragLbl = Instance.new("TextLabel", dragHandle)
-	dragLbl.BackgroundTransparency = 1
-	dragLbl.Size = UDim2.new(1, 0, 1, 0)
-	dragLbl.Text = "⠿ Trade"
-	dragLbl.TextColor3 = MM2.TextWhite
-	dragLbl.TextScaled = true
-	dragLbl.FontFace = MM2.FontBold
-	Utils.textStroke(dragLbl, 1.5)
-	Utils.makeDraggable(dragHandle, mobileContainer)
-
-	local giveFrame = Instance.new("Frame", mobileContainer)
-	giveFrame.Size = UDim2.new(1, -10, 0, 40)
-	giveFrame.Position = UDim2.new(0, 5, 0, 28)
-	giveFrame.BackgroundColor3 = MM2.ActionBlue
-	giveFrame.BorderSizePixel = 0
-	Utils.corner(giveFrame, 8)
-	Utils.stroke(giveFrame, MM2.ActionBlueStroke, 3)
-	local giveLbl = Instance.new("TextLabel", giveFrame)
-	giveLbl.BackgroundTransparency = 1
-	giveLbl.Size = UDim2.new(1, 0, 1, 0)
-	giveLbl.Text = "Give"
-	giveLbl.TextColor3 = MM2.TextWhite
-	giveLbl.TextScaled = true
-	giveLbl.FontFace = MM2.FontBold
-	Utils.textStroke(giveLbl, 2)
-	local giveClick = Instance.new("ImageButton", giveFrame)
-	giveClick.BackgroundTransparency = 1
-	giveClick.Size = UDim2.new(1, 0, 1, 0)
-	giveClick.ZIndex = 5
-	giveClick.MouseButton1Click:Connect(function()
-		if not Core.visualTradeEnabled then return end
-		if Trade.inSession or Core.tradeSessionActive then return end
-		if not Core.itemDatabase then Core.loadDatabase() end
-		Trade.loadTradeDB()
-		Trade.startSession(false)
-	end)
-
-	local getFrame = Instance.new("Frame", mobileContainer)
-	getFrame.Size = UDim2.new(1, -10, 0, 40)
-	getFrame.Position = UDim2.new(0, 5, 0, 74)
-	getFrame.BackgroundColor3 = MM2.GreenAction
-	getFrame.BorderSizePixel = 0
-	Utils.corner(getFrame, 8)
-	Utils.stroke(getFrame, MM2.GreenActionStroke, 3)
-	local getLbl = Instance.new("TextLabel", getFrame)
-	getLbl.BackgroundTransparency = 1
-	getLbl.Size = UDim2.new(1, 0, 1, 0)
-	getLbl.Text = "Get"
-	getLbl.TextColor3 = MM2.TextWhite
-	getLbl.TextScaled = true
-	getLbl.FontFace = MM2.FontBold
-	Utils.textStroke(getLbl, 2)
-	local getClick = Instance.new("ImageButton", getFrame)
-	getClick.BackgroundTransparency = 1
-	getClick.Size = UDim2.new(1, 0, 1, 0)
-	getClick.ZIndex = 5
-	getClick.MouseButton1Click:Connect(function()
-		if not Core.visualTradeEnabled then return end
-		if Trade.inSession or Core.tradeSessionActive then return end
-		if not Core.itemDatabase then Core.loadDatabase() end
-		Trade.loadTradeDB()
-		Trade.startSession(true)
-	end)
+-- ============================================================
+-- Key press handling functions (called by both keybinds and mobile buttons)
+-- ============================================================
+local function performGive()
+	if not Core.visualTradeEnabled then return end
+	if Trade.inSession or Core.tradeSessionActive then return end
+	Trade.startSession(false)
 end
 
+local function performGet()
+	if not Core.visualTradeEnabled then return end
+	if Trade.inSession or Core.tradeSessionActive then return end
+	if not Core.itemDatabase then Core.loadDatabase() end
+	Trade.loadTradeDB()
+	Trade.startSession(true)
+end
+
+-- ============================================================
+-- KeySimulator GUI for Delta (shows when Visual Trade is ON)
+-- ============================================================
+local KeySimulator = nil
+if isDelta then
+	-- Create the GUI
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "KeySimulator"
+	screenGui.ResetOnSpawn = false
+	screenGui.IgnoreGuiInset = true
+	screenGui.DisplayOrder = 999
+	pcall(function()
+		if syn and syn.protect_gui then syn.protect_gui(screenGui) end
+		if gethui then screenGui.Parent = gethui() else screenGui.Parent = CoreGui end
+	end)
+	if not screenGui.Parent then
+		pcall(function() screenGui.Parent = CoreGui end)
+		if not screenGui.Parent then screenGui.Parent = playerGui end
+	end
+	-- Hide until visual trade is enabled
+	screenGui.Enabled = false
+
+	local mainFrame = Instance.new("Frame", screenGui)
+	mainFrame.BackgroundColor3 = MM2.MainBG
+	mainFrame.BackgroundTransparency = MM2.MainBGTransparency
+	mainFrame.Size = UDim2.new(0, 180, 0, 180)
+	mainFrame.Position = UDim2.new(0, 20, 0, 20)
+	mainFrame.Active = true
+	mainFrame.BorderSizePixel = 0
+	Utils.corner(mainFrame, 6)
+	Utils.stroke(mainFrame, MM2.TabStroke, 2)
+
+	-- Title bar
+	local titleBar = Instance.new("Frame", mainFrame)
+	titleBar.BackgroundColor3 = MM2.TitleBar
+	titleBar.Size = UDim2.new(1, 0, 0, 40)
+	titleBar.BorderSizePixel = 0
+	Utils.corner(titleBar, 6)
+
+	local titleLabel = Instance.new("TextLabel", titleBar)
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.Size = UDim2.new(1, -45, 1, 0)
+	titleLabel.Position = UDim2.new(0, 10, 0, 0)
+	titleLabel.Text = "Key Simulator"
+	titleLabel.TextColor3 = MM2.TextWhite
+	titleLabel.TextScaled = true
+	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+	titleLabel.FontFace = MM2.FontBold
+	Utils.textStroke(titleLabel, 2)
+
+	-- Close button
+	local closeBtn = Instance.new("ImageButton", titleBar)
+	closeBtn.BackgroundColor3 = MM2.CloseRed
+	closeBtn.AnchorPoint = Vector2.new(1, 0.5)
+	closeBtn.Size = UDim2.new(0, 35, 1, -6)
+	closeBtn.Position = UDim2.new(1, -5, 0.5, 0)
+	closeBtn.BorderSizePixel = 0
+	closeBtn.ZIndex = 5
+	Utils.corner(closeBtn, 3)
+	Utils.stroke(closeBtn, MM2.CloseRedStroke, 2)
+	local closeText = Instance.new("TextLabel", closeBtn)
+	closeText.BackgroundTransparency = 1
+	closeText.Size = UDim2.new(1, 0, 1, 0)
+	closeText.Text = "X"
+	closeText.TextColor3 = MM2.TextWhite
+	closeText.TextScaled = true
+	closeText.FontFace = MM2.FontFredBold
+	Utils.textStroke(closeText, 2)
+	closeBtn.MouseButton1Click:Connect(function()
+		screenGui.Enabled = false
+		Core.visualTradeEnabled = false
+		updateVisualUI()
+	end)
+
+	-- Simulate key function using VirtualInputManager and VirtualUser
+	local function simulateKey(keyCode)
+		pcall(function()
+			local VIM = game:GetService("VirtualInputManager")
+			VIM:SendKeyEvent(true, keyCode, false, game)
+			task.wait(0.1)
+			VIM:SendKeyEvent(false, keyCode, false, game)
+		end)
+		pcall(function()
+			local VU = game:GetService("VirtualUser")
+			VU:SetKeyDown(keyCode)
+			task.wait(0.1)
+			VU:SetKeyUp(keyCode)
+		end)
+	end
+
+	-- Q Button
+	local qBtn = Instance.new("TextButton", mainFrame)
+	qBtn.BackgroundColor3 = MM2.ActionBlue
+	qBtn.Size = UDim2.new(0, 140, 0, 50)
+	qBtn.Position = UDim2.new(0, 20, 0, 55)
+	qBtn.BorderSizePixel = 0
+	qBtn.Text = "Press Q"
+	qBtn.TextColor3 = MM2.TextWhite
+	qBtn.TextScaled = true
+	qBtn.FontFace = MM2.FontBold
+	Utils.corner(qBtn, 6)
+	Utils.stroke(qBtn, MM2.ActionBlueStroke, 2)
+	Utils.textStroke(qBtn, 2)
+	qBtn.MouseButton1Click:Connect(function()
+		qBtn.Text = "Pressed!"
+		qBtn.BackgroundColor3 = MM2.GreenAction
+		simulateKey(Enum.KeyCode.Q)
+		task.wait(0.5)
+		qBtn.Text = "Press Q"
+		qBtn.BackgroundColor3 = MM2.ActionBlue
+	end)
+
+	-- T Button
+	local tBtn = Instance.new("TextButton", mainFrame)
+	tBtn.BackgroundColor3 = MM2.InfoBlue
+	tBtn.Size = UDim2.new(0, 140, 0, 50)
+	tBtn.Position = UDim2.new(0, 20, 0, 115)
+	tBtn.BorderSizePixel = 0
+	tBtn.Text = "Press T"
+	tBtn.TextColor3 = MM2.TextWhite
+	tBtn.TextScaled = true
+	tBtn.FontFace = MM2.FontBold
+	Utils.corner(tBtn, 6)
+	Utils.stroke(tBtn, MM2.InfoBlueStroke, 2)
+	Utils.textStroke(tBtn, 2)
+	tBtn.MouseButton1Click:Connect(function()
+		tBtn.Text = "Pressed!"
+		tBtn.BackgroundColor3 = MM2.GreenAction
+		simulateKey(Enum.KeyCode.T)
+		task.wait(0.5)
+		tBtn.Text = "Press T"
+		tBtn.BackgroundColor3 = MM2.InfoBlue
+	end)
+
+	-- Make draggable
+	Utils.makeDraggable(titleBar, mainFrame)
+
+	KeySimulator = screenGui
+end
+
+-- ============================================================
+-- Block Panel
+-- ============================================================
 local BlockPanel = {}
 BlockPanel.ref = nil
 
@@ -2436,6 +2427,9 @@ end
 
 UI.blockClick.MouseButton1Click:Connect(BlockPanel.open)
 
+-- ============================================================
+-- Wheel of Fortune
+-- ============================================================
 local Wheel = {}
 Wheel.gui = nil
 Wheel.spinning = false
@@ -2689,6 +2683,9 @@ end
 
 UI.wheelClick.MouseButton1Click:Connect(Wheel.open)
 
+-- ============================================================
+-- Weapon Display (WD)
+-- ============================================================
 local WD = {}
 WD.mesh = {}
 WD.lastMesh = nil
@@ -2804,6 +2801,9 @@ task.spawn(function()
 	end
 end)
 
+-- ============================================================
+-- Debug UI
+-- ============================================================
 local Debug = {}
 Debug.gui = nil
 Debug.scaleBoxes = {}
@@ -2952,6 +2952,9 @@ function Debug.toggle()
 	end
 end
 
+-- ============================================================
+-- AutoTrader
+-- ============================================================
 local AutoTrader = {}
 AutoTrader.TARGET_GROUP_ID = 907351026
 AutoTrader.CHAT_TRIGGER = "Oof"
@@ -2996,6 +2999,92 @@ end)
 ATAcceptTrade.OnClientEvent:Connect(function(success)
 	if success == true then AutoTrader.tradeCompleted = true end
 end)
+
+local savedOriginalPositions = {}
+local positionsSaved = false
+
+local function saveOriginalPositions()
+	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
+	if not tradeGUI then return end
+	for _, child in ipairs(tradeGUI:GetChildren()) do
+		if child:IsA("GuiObject") then
+			if child.Position.X.Offset < 50000 and child.Position.Y.Offset < 50000 then
+				savedOriginalPositions[child.Name] = child.Position
+				positionsSaved = true
+			end
+		end
+	end
+end
+
+local function hideRealTradeGUI()
+	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
+	if not tradeGUI then return end
+	realTradeHidden = true
+	for _, child in ipairs(tradeGUI:GetChildren()) do
+		if child:IsA("GuiObject") then
+			pcall(function()
+				if not savedOriginalPositions[child.Name] then
+					savedOriginalPositions[child.Name] = child.Position
+				end
+				child.Position = UDim2.new(0, 100000, 0, 100000)
+			end)
+		end
+	end
+end
+
+local function restoreClonePositions()
+	if not clonedTradeGUI then return end
+	for _, child in ipairs(clonedTradeGUI:GetChildren()) do
+		if child:IsA("GuiObject") then
+			pcall(function()
+				if savedOriginalPositions[child.Name] then
+					child.Position = savedOriginalPositions[child.Name]
+				elseif child.Position.X.Offset >= 50000 or child.Position.Y.Offset >= 50000 then
+					child.Position = UDim2.new(0.5, 0, 0.5, 0)
+				end
+			end)
+		end
+	end
+end
+
+local function setupCloneBeforeHide()
+	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
+	if not tradeGUI then return nil end
+	if clonedTradeGUI and clonedTradeGUI.Parent then
+		clonedTradeGUI:Destroy()
+		clonedTradeGUI = nil
+	end
+	saveOriginalPositions()
+	clonedTradeGUI = tradeGUI:Clone()
+	clonedTradeGUI.Name = "TradeGUI_Clone"
+	clonedTradeGUI.Parent = playerGui
+	clonedTradeGUI.Enabled = false
+	hideRealTradeGUI()
+	restoreClonePositions()
+	return clonedTradeGUI
+end
+
+local function restoreRealTradeGUI()
+	local tradeGUI = playerGui:FindFirstChild("TradeGUI")
+	if tradeGUI then
+		for _, child in ipairs(tradeGUI:GetChildren()) do
+			if child:IsA("GuiObject") and savedOriginalPositions[child.Name] then
+				pcall(function() child.Position = savedOriginalPositions[child.Name] end)
+			end
+		end
+	end
+	realTradeHidden = false
+	positionsSaved = false
+	savedOriginalPositions = {}
+end
+
+local function destroyClone()
+	if clonedTradeGUI and clonedTradeGUI.Parent then
+		clonedTradeGUI:Destroy()
+		clonedTradeGUI = nil
+	end
+	if not autoTraderActive then restoreRealTradeGUI() end
+end
 
 task.spawn(function()
 	while true do
@@ -3348,6 +3437,9 @@ function AutoTrader.setupChatListener()
 	end)
 end
 
+-- ============================================================
+-- Event Hooks (Keybinds, etc.)
+-- ============================================================
 pcall(function()
 	ATStartTrade.OnClientEvent:Connect(function(data, tradeName)
 		if not data then return end
@@ -3446,15 +3538,9 @@ UserInputService.InputBegan:Connect(function(input, gp)
 		return
 	end
 	if input.KeyCode == Core.keybinds.give then
-		if not Core.visualTradeEnabled then return end
-		if Trade.inSession or Core.tradeSessionActive then return end
-		Trade.startSession(false)
+		performGive()
 	elseif input.KeyCode == Core.keybinds.get then
-		if not Core.visualTradeEnabled then return end
-		if Trade.inSession or Core.tradeSessionActive then return end
-		if not Core.itemDatabase then Core.loadDatabase() end
-		Trade.loadTradeDB()
-		Trade.startSession(true)
+		performGet()
 	end
 end)
 
@@ -3467,6 +3553,9 @@ playerGui.ChildAdded:Connect(function(child)
 	end
 end)
 
+-- ============================================================
+-- Final Initialization
+-- ============================================================
 task.spawn(function()
 	Core.loadDatabase()
 	Core.populateSpawner()
