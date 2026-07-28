@@ -1208,8 +1208,17 @@ end
 
 function Trade.getClaimNI()
 	local m = playerGui:FindFirstChild("MainGUI"); if not m then return nil end
-	local g = m:FindFirstChild("Game"); if not g then return nil end
-	return g:FindFirstChild("NewItem")
+	local isPhone = currentTradeGUIName == "TradeGUI_Phone"
+	if isPhone then
+		local direct = m:FindFirstChild("NewItem")
+		if direct then return direct end
+	end
+	local g = m:FindFirstChild("Game")
+	if g then
+		local ni = g:FindFirstChild("NewItem")
+		if ni then return ni end
+	end
+	return m:FindFirstChild("NewItem")
 end
 
 function Trade.getSearchBox()
@@ -1373,18 +1382,24 @@ function Trade.applySlot(sn)
 	local sc = slot:FindFirstChild("Container"); local sin = slot:FindFirstChild("ItemName")
 	if not sc or not sin then return end
 	local icon = sc:FindFirstChild("Icon"); local amt = sc:FindFirstChild("Amount"); local nl = sin:FindFirstChild("Label")
+	local coloredName = sin:FindFirstChild("ColoredName")
 	if st == nil then
-		if icon then icon.Image = "" end; if amt then amt.Text = "..." end; if nl then nl.Text = " " end
+		if icon then icon.Image = "" end; if amt then amt.Text = "..." end
+		if nl then nl.Text = " " end
+		if coloredName then coloredName.Text = " " end
 		slot.Visible = false
 	else
 		if icon then icon.Image = st.icon or "" end
 		if amt then amt.Text = Trade.fmtOffer(st.amount) end
-		if nl then nl.Text = tostring(st.displayName or st.name) end
+		local nameText = tostring(st.displayName or st.name)
+		if nl then nl.Text = nameText end
+		if coloredName then coloredName.Text = nameText end
 		if st.color then
 			pcall(function()
 				local isPhone = currentTradeGUIName == "TradeGUI_Phone"
 				if isPhone then
-					if nl then nl.TextColor3 = st.color end
+					if nl then nl.Visible = true; nl.TextColor3 = st.color end
+					if coloredName then coloredName.Visible = true; coloredName.TextColor3 = st.color end
 					local rarityBar = sin:FindFirstChild("RarityBar")
 					if rarityBar then rarityBar.BackgroundColor3 = st.color end
 				else
@@ -1409,18 +1424,24 @@ function Trade.applyTheirSlot(sn)
 	local sc = slot:FindFirstChild("Container"); local sin = slot:FindFirstChild("ItemName")
 	if not sc or not sin then return end
 	local icon = sc:FindFirstChild("Icon"); local amt = sc:FindFirstChild("Amount"); local nl = sin:FindFirstChild("Label")
+	local coloredName = sin:FindFirstChild("ColoredName")
 	if st == nil then
-		if icon then icon.Image = "" end; if amt then amt.Text = "..." end; if nl then nl.Text = " " end
+		if icon then icon.Image = "" end; if amt then amt.Text = "..." end
+		if nl then nl.Text = " " end
+		if coloredName then coloredName.Text = " " end
 		slot.Visible = false
 	else
 		if icon then icon.Image = st.icon or "" end
 		if amt then amt.Text = Trade.fmtOffer(st.amount) end
-		if nl then nl.Text = tostring(st.displayName or st.name) end
+		local nameText = tostring(st.displayName or st.name)
+		if nl then nl.Text = nameText end
+		if coloredName then coloredName.Text = nameText end
 		if st.color then
 			pcall(function()
 				local isPhone = currentTradeGUIName == "TradeGUI_Phone"
 				if isPhone then
-					if nl then nl.TextColor3 = st.color end
+					if nl then nl.Visible = true; nl.TextColor3 = st.color end
+					if coloredName then coloredName.Visible = true; coloredName.TextColor3 = st.color end
 					local rarityBar = sin:FindFirstChild("RarityBar")
 					if rarityBar then rarityBar.BackgroundColor3 = st.color end
 				else
